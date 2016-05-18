@@ -58,7 +58,7 @@ Let us use `W` to denote the width in pixels of the entire image, and `H` to den
 | I32       | 4       | Number of bytes in bit depth arrays (always `h*w`)
 |  U8       | `h*w`   | Bit depth in each block needed to cover min-max range (row-major order)
 | I32       | 4       | Number of bytes in per-block minimum intensity
-| varies    | k*`h*w` | `k` is 1, 2, or 4 depending on whether 8-bit, 16-bit, or 32-bit data is stored
+| U8        | `h*w`   | Minimum intensities (note: could expand size to handle higher bit depth images!)
 | I32       | 4       | Number of U64s in data block (equal to the sum of the number of bits)
 | U64       | varies  | Bits for pixels in each block (row-major order within blocks, then sequentially across blocks in row-major order)
 
@@ -163,7 +163,7 @@ We need **3** bits and our minimum value is **28**.  Our data is:
 
 followed by a bunch of 0's.  We pack these into three U64s, which turn out to be 0x0000045DF600A773, 0x0000000000000000, 0x0000000000000000.
 
-Finally, the last block at the bottom-right corner is all 26, so we need **0** bits and our minimum values is **26**.
+Finally, the last block at the bottom-right corner is all 26, so we need **0** bits and our minimum value is **26**.
 
 Thus, we encode the image data as:
 
