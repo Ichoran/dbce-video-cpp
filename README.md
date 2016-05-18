@@ -67,7 +67,7 @@ Let us use `W` to denote the width in pixels of the entire image, and `H` to den
 Consider the following 10x10 8-bit image data (rows and columns are numbered):
 
 |     |0 | 1| 2| 3| 4| 5| 6| 7| 8| 9|
-|-----|--|--|--|--|--|--|--|--|--|--|
+|-----|---|---|---|---|---|---|---|---|---|---|
 |**0**|25|27|23|29|22|24|29|23|25|24
 |**1**|22|24|21|25|22|27|28|21|27|26
 |**2**|25|26|22|29|25|20|28|23|26|25
@@ -82,7 +82,7 @@ Consider the following 10x10 8-bit image data (rows and columns are numbered):
 First, we consider the first 8x8 block and find the maximum and minimum value therein:
 
 |     |0 | 1| 2| 3| 4| 5| 6| 7| 8| 9|
-|-----|--|--|--|--|--|--|--|--|--|--|
+|-----|---|---|---|---|---|---|---|---|---|---|
 |**0**|`25`|`27`|`23`|`29`|`22`|`24`|`29`|`23`|25|24
 |**1**|`22`|`24`|`21`|`25`|`22`|`27`|`28`|`21`|27|26
 |**2**|`25`|`26`|`22`|`29`|`25`|`20`|`28`|`23`|26|25
@@ -97,7 +97,7 @@ First, we consider the first 8x8 block and find the maximum and minimum value th
 We find that the maximum and minimum pixels cover a range of 14, so 4 bits are enough to represent the data.  We remember these numbers: **4** bits, **19** is the minimum value, and subtract off the minimum from that part of the image and convert to bits (here written as hexidecimal, 0-F):
 
 |     |0 | 1| 2| 3| 4| 5| 6| 7
-|-----|--|--|--|--|--|--|--|--
+|-----|---|---|---|---|---|---|---|--
 |**0**|6|8|4|A|3|6|A|4
 |**1**|3|5|2|6|3|8|9|2
 |**2**|6|7|3|A|6|1|9|4
@@ -112,7 +112,7 @@ We pack these into U64s in least-significant order, which means (as we write hex
 We then move right and consider the next (partial) block:
 
 |     |0 | 1| 2| 3| 4| 5| 6| 7| 8| 9|
-|-----|--|--|--|--|--|--|--|--|--|--|
+|-----|---|---|---|---|---|---|---|---|---|---|
 |**0**|25|27|23|29|22|24|29|23|`25`|**_24_**
 |**1**|22|24|21|25|22|27|28|21|**_27_**|`26`
 |**2**|25|26|22|29|25|20|28|23|`26`|`25`
@@ -127,7 +127,7 @@ We then move right and consider the next (partial) block:
 We find that we need **2** bits per pixel and our minimum value is **24**.  We then subtract off the minimum and pad with zeros:
 
 |     | 8| 9|
-|-----|--|
+|-----|---|
 |**0**|1|0|0|0|0|0|0|0|0|0
 |**1**|3|2|0|0|0|0|0|0|0|0
 |**2**|2|1|0|0|0|0|0|0|0|0
@@ -142,7 +142,7 @@ We then pack these into two U64s like so: 0x000D0006000B0001, 0x0004000A000B0000
 We then move down to the next row:
 
 |     |0 | 1| 2| 3| 4| 5| 6| 7| 8| 9|
-|-----|--|--|--|--|--|--|--|--|--|--|
+|-----|---|---|---|---|---|---|---|---|---|---|
 |**0**|25|27|23|29|22|24|29|23|25|24
 |**1**|22|24|21|25|22|27|28|21|27|26
 |**2**|25|26|22|29|25|20|28|23|26|25
@@ -157,7 +157,7 @@ We then move down to the next row:
 We need **3** bits and our minimum value is **28**.  Our data is:
 
 |     |0 | 1| 2| 3| 4| 5| 6| 7|
-|-----|--|--|--|--|--|--|--|--|
+|-----|---|---|---|---|---|---|---|---|
 |**8**|3|6|5|3|2|1|0|0
 |**9**|6|6|7|6|5|0|1|0
 
