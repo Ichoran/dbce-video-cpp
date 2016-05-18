@@ -27,6 +27,10 @@ struct dbde_data {
     uint64_t *data;
 };
 
+int dbde_pack_8x8(uint8_t *image, int stride, uint8_t *target);
+
+int dbde_pack_8x8_partial(uint8_t *image, int stride, int rightmargin, int downmargin, uint8_t *target);
+
 video_header dbde_unpack_video_header(uint8_t *encoded);
 
 int dbde_pack_video_header(video_header vh, uint8_t *encoded);
