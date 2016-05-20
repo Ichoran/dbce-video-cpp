@@ -2,7 +2,7 @@
   * Copyright 2016 by Rex Kerr and Calico Life Sciences   *
   * This file distributed under the Apache License 2.0    **/
 
-#include <smmintrin.h>
+#include <x86intrin.h>
 #include <stdint.h>
 #include <string.h>
 #include <stdio.h>
@@ -271,7 +271,9 @@ int main(int argc, char **argv) {
     uint8_t out[64];
     memset(out, 0, 64);
 
+    int64_t ta0 = __rdtsc();
     int i = dbde_pack_8x8(example, 10, out);
+    int64_t tz0 = __rdtsc();
     printf("%x\n", i);
     for (int j = 0; j < 8; j++) { 
         printf("%016lx\n", *((int64_t*)(out + 8*j)));
@@ -279,7 +281,9 @@ int main(int argc, char **argv) {
 
     printf("\n\n\n");
 
+    int64_t ta1 = __rdtsc();
     i = dbde_pack_8x8_partial(example + 8, 10, 2, 8, out);
+    int64_t tz1 = __rdtsc();
     printf("%x\n", i);
     for (int j = 0; j < 8; j++) { 
         printf("%016lx\n", *((int64_t*)(out + 8*j)));
@@ -287,7 +291,9 @@ int main(int argc, char **argv) {
 
     printf("\n\n\n");
 
+    int64_t ta2 = __rdtsc();
     i = dbde_pack_8x8_partial(example + 8*10, 10, 8, 2, out);
+    int64_t tz2 = __rdtsc();
     printf("%x\n", i);
     for (int j = 0; j < 8; j++) { 
         printf("%016lx\n", *((int64_t*)(out + 8*j)));
@@ -295,9 +301,27 @@ int main(int argc, char **argv) {
 
     printf("\n\n\n");
 
+    int64_t ta3 = __rdtsc();
     i = dbde_pack_8x8_partial(example + 8*10 + 8, 10, 2, 2, out);
+    int64_t tz3 = __rdtsc();
     printf("%x\n", i);
     for (int j = 0; j < 8; j++) { 
         printf("%016lx\n", *((int64_t*)(out + 8*j)));
     }
+
+    uint32_t *big = (uint32_t*)calloc(1024*1024 + 2048, 4);
+    for (int bi = 0; bi < 1024*1024 + 2048; bi++) big[bi] = rand();
+    uint32_t *ix = ((uint32_t*)&(out[0]));
+    uint32_t si = 0;
+    uint32_t n = 0;
+    int64_t ta4 = __rdtsc();
+    for (int ni = 0; ni < 1024*1024/16; ni++) {
+        dbde_pack_8x8(((uint8_t*)&(big[ni*16])), 2048, out);
+        si += *ix + *(ix+1) + *(ix+2) + *(ix+3) + *(ix+4) + *(ix+5) + *(ix+6) + *(ix+7);
+        n += 1;
+    }
+    int64_t tz4 = __rdtsc();
+    printf("%d %d\n", si, n);
+
+    printf("\n\n%d %d %d %d\n%f\n", (int)(tz0-ta0), (int)(tz1-ta1), (int)(tz2-ta2), (int)(tz3-ta3), (tz4-ta4)/((double)n));
 }
