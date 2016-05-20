@@ -29,7 +29,7 @@ The video header is 28 bytes long, and is packed as follows.  All values are sto
 | I32       | 4       | Number of additional U64s in video header (always 3 for now)
 | U64       | 8       | Image height
 | U64       | 8       | Image width
-| U64       | 8       | Metadata, typically frame rate in Hz (not needed for parsing)
+| U64       | 8       | Frame rate in Hz (not needed for parsing)
 
 ### Frame header
 
@@ -38,7 +38,7 @@ The frame header is 20 bytes and contains no information essential for recovery 
 | Data type |  Size (bytes) |  Meaning |
 |-----------|---------|----------|
 | I32       | 4       | Number of additional U64s in frame header (always 2 for now)
-| U64       | 8       | Frame number (should be redundant?)
+| U64       | 8       | Frame number (frames are in order but some may have been dropped)
 | U64       | 8       | Reserved
 
 ### Frame data
@@ -98,7 +98,7 @@ We find that the maximum and minimum pixels cover a range of 14, so 4 bits are e
 
 |     |0 | 1| 2| 3| 4| 5| 6| 7
 |-----|---|---|---|---|---|---|---|---
-|**0**|6|8|4|A|3|6|A|4
+|**0**|6|8|4|A|3|5|A|4
 |**1**|3|5|2|6|3|8|9|2
 |**2**|6|7|3|A|6|1|9|4
 |**3**|0|4|6|2|9|0|3|6
@@ -107,7 +107,7 @@ We find that the maximum and minimum pixels cover a range of 14, so 4 bits are e
 |**6**|B|9|D|6|9|8|9|8
 |**7**|A|C|C|D|A|A|6|3
 
-We pack these into U64s in least-significant order, which means (as we write hexidecimal in most-significant order) we have the four U64s 0x298362534A63A486, 0x630926404916A376, 0x657A9CBC78469B68, and 0x36AADCCA89896D9B for our data.
+We pack these into U64s in least-significant order, which means (as we write hexidecimal in most-significant order) we have the four U64s 0x298362534A53A486, 0x630926404916A376, 0x657A9CBC78469B68, and 0x36AADCCA89896D9B for our data.
 
 We then move right and consider the next (partial) block:
 
