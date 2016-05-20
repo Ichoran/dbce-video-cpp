@@ -45,7 +45,7 @@ The frame header is 20 bytes and contains no information essential for recovery 
 
 #### How images are packed
 
-Images are tiled in 8x8 blocks in row major order and are "minimum value padded" in that if number of rows or columns is not divisible by 8, the part of the 8x8 block that is missing is encoded as if present and containing the minimum value present in the actually-existing pixels in that block.
+Images are tiled in 8x8 blocks in row major order and are "minimum value padded" in that if number of rows or columns is not divisible by 8, the part of the 8x8 block that is missing is filled in left-to-right with the last valid value to get full rows, and then any missing rows are filled in with the last full row.
 
 Within each tile, the minimum and maximum value is computed.  The minimum number of bits needed to store that range is used, and the bits are packed into U64s (least significant first).  Note that because there are integer numbers of bits and 64 pixels, there will always be an integer number of U64s to store the entire data.
 
@@ -124,20 +124,22 @@ We then move right and consider the next (partial) block:
 |**8**|31|34|33|31|30|29|28|28|26|26
 |**9**|34|34|35|35|33|28|29|28|26|26
 
-We find that we need **2** bits per pixel and our minimum value is **24**.  We then subtract off the minimum and pad with zeros:
+We find that we need **2** bits per pixel and our minimum value is **24**.  We copy the last value rightwards, subtract off the minimum, and pad with zeros:
 
 |     | 8 | 9 |
 |-----|---|---
 |**0**|1|0|0|0|0|0|0|0|0|0
-|**1**|3|2|0|0|0|0|0|0|0|0
-|**2**|2|1|0|0|0|0|0|0|0|0
-|**3**|1|3|0|0|0|0|0|0|0|0
+|**1**|3|2|2|2|2|2|2|2|2|2
+|**2**|2|1|1|1|1|1|1|1|1|1
+|**3**|1|3|3|3|3|3|3|3|3|3
 |**4**|0|0|0|0|0|0|0|0|0|0
-|**5**|3|2|0|0|0|0|0|0|0|0
-|**6**|2|2|0|0|0|0|0|0|0|0
-|**7**|0|1|0|0|0|0|0|0|0|0
+|**5**|3|2|2|2|2|2|2|2|2|2
+|**6**|2|2|2|2|2|2|2|2|2|2
+|**7**|0|1|1|1|1|1|1|1|1|1
 
-We then pack these into two U64s like so: 0x000D0006000B0001, 0x0004000A000B0000.
+We then pack these into two U64s like so
+
+0xFFFD5556AAAB0001, 0x5554AAAAAAAB0000.
 
 We then move down to the next row:
 
@@ -161,7 +163,7 @@ We need **3** bits and our minimum value is **28**.  Our data is:
 |**8**|3|6|5|3|2|1|0|0
 |**9**|6|6|7|6|5|0|1|0
 
-followed by a bunch of 0's.  We pack these into three U64s, which turn out to be 0x0000045DF600A773, 0x0000000000000000, 0x0000000000000000.
+followed by a bunch of repeats of row **9**.  We pack these into three U64s, which turn out to be 0x5DF6045DF600A773, 0xF6045DF6045DF604, 0x045DF6045DF6045D.
 
 Finally, the last block at the bottom-right corner is all 26, so we need **0** bits and our minimum value is **26**.
 
@@ -172,12 +174,12 @@ Thus, we encode the image data as:
 0x04 0x02 0x03 0x00   // Number of bits per block
 0x00000004            // Number of min values
 0x13 0x18 0x1C 0x1A   // Minimum values (1/byte)
-0x298362534A63A486    // Image data
+0x298362534A53A486    // Image data
 0x630926404916A376
 0x657A9CBC78469B68
 0x36AADCCA89896D9B
-0x000D0006000B0001
-0x0004000A000B0000
+0xFFFD5556AAAB0001
+0x5554AAAAAAAB0000
 0x0000045DF600A773
 0x0000000000000000
 0x0000000000000000

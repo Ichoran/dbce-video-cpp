@@ -8,6 +8,8 @@
 #include <stdio.h>
 #include "dbde_util.h"
 
+//#define LOG_ME
+
 void p(__m128i x) {
     printf("%016lx\n%016lx\n\n", *((int64_t*)&x), *((int64_t*)(((char*)&x)+sizeof(int64_t))));
 }
@@ -19,10 +21,13 @@ int dbde_pack_8x8(uint8_t *image, int stride, uint8_t *target) {
     __m128i ef = _mm_set_epi64x(*((int64_t*)(image + stride)), *((int64_t*)image)); image += 2*stride;
     __m128i gh = _mm_set_epi64x(*((int64_t*)(image + stride)), *((int64_t*)image));
 
+#ifdef LOG_ME
+    printf("STARTING\n");
     p(ab);
     p(cd);
     p(ef);
     p(gh);
+#endif
 
     // Compute min/max across the whole array (16 wide)
     __m128i hi = _mm_max_epu8(ab, cd);
@@ -32,8 +37,11 @@ int dbde_pack_8x8(uint8_t *image, int stride, uint8_t *target) {
     hi = _mm_max_epu8(hi, gh);
     lo = _mm_min_epu8(lo, gh);
 
+#ifdef LOG_ME
+    printf("HI/LO INITIAL\n");
     p(hi);
     p(lo);
+#endif
 
     // For min: reduce to 8 wide, then use minpos instruction (just works)
     lo = _mm_min_epu8(lo, _mm_srli_epi16(lo, 8)); // stuvwxyz min 0s0u0x0z
@@ -55,12 +63,14 @@ int dbde_pack_8x8(uint8_t *image, int stride, uint8_t *target) {
     ef = _mm_sub_epi8(ef, lo);                 // Packed 16 across
     gh = _mm_sub_epi8(gh, lo);                 // Packed 16 across
 
-    printf("\n");
+#ifdef LOG_ME
+    printf("\nI0 = %08x I1 = %08x\nSUBTRACTED\n", I0, I1);
     p(lo);
     p(ab);
     p(cd);
     p(ef);
     p(gh);
+#endif
 
     if ((I1 & 0x80) != 0) {
         // All bits required
@@ -81,7 +91,9 @@ int dbde_pack_8x8(uint8_t *image, int stride, uint8_t *target) {
         ef = _mm_maddubs_epi16(x, ef);             // Now 8 shorts across
         gh = _mm_maddubs_epi16(x, gh);             // Now 8 shorts across
 
-        printf("\n"); p(ab); p(cd); p(ef); p(gh);
+#ifdef LOG_ME
+        printf("\n8SHORTS\n"); p(ab); p(cd); p(ef); p(gh);
+#endif
 
         x = _mm_set1_epi32((1 << (2*k+16)) + 1);
         ab = _mm_madd_epi16(x, ab);                // Now 4 ints across
@@ -89,7 +101,9 @@ int dbde_pack_8x8(uint8_t *image, int stride, uint8_t *target) {
         ef = _mm_madd_epi16(x, ef);                // Now 4 ints across
         gh = _mm_madd_epi16(x, gh);                // Now 4 ints across
 
-        printf("\n"); p(ab); p(cd); p(ef); p(gh);
+#ifdef LOG_ME
+        printf("\n4INTS\n"); p(ab); p(cd); p(ef); p(gh);
+#endif
 
         int *i;
         int kk = 0;
@@ -101,7 +115,9 @@ int dbde_pack_8x8(uint8_t *image, int stride, uint8_t *target) {
             for (int mm = 0; mm < 4; mm++) {
                 p = p | (((uint64_t)(*i)) << kk);
                 kk += k;
+#ifdef LOG_ME
                 printf("%016lx %08x\n", p, kk);
+#endif
                 if (kk >= 64) {
                     *((uint64_t*)target) = p;
                     target += sizeof(uint64_t);
@@ -111,14 +127,57 @@ int dbde_pack_8x8(uint8_t *image, int stride, uint8_t *target) {
                 i++;
             }
         }
+#ifdef LOG_ME
         printf("%x\n",I1);
+#endif
         return (k << 14) | I0;  // Note we already multiplied k by 4, so we shift two less!
     }
 }
 
-/*
-int dbde_pack_8x8_partial(uint8_t *image, int stride, int rightmargin, int downmargin, uint8_t *target);
-*/
+/** MUST have rightmargin >=  1 && downmargin >= 1, and must also have at least one of rightmargin < 8 && downmargin < 8! */
+int dbde_pack_8x8_partial(uint8_t *image, int stride, int rightmargin, int downmargin, uint8_t *target) {
+    uint8_t full[64];
+    if (rightmargin >= 8) {
+        int j = 0;
+        for (; j < downmargin; j++) *(((uint64_t*)full) + j) = *((uint64_t*)(image + j*stride));
+        for (; j < 8; j++) *(((uint64_t*)full) + j) = *((uint64_t*)(image + (downmargin-1)*stride));
+    }
+    else {
+#ifdef LOG_ME
+        printf("DOWN %d RIGHT %d\n", downmargin, rightmargin);
+#endif
+        uint8_t *fu = full;
+        int j = 0;
+        for (; j < downmargin; j++) {
+            int k = 0;
+            for (; k < rightmargin; k++) {
+                *fu = *(image + k);
+#ifdef LOG_ME
+                printf("%02x", *fu);
+#endif
+                fu += 1;
+            }
+            uint8_t c = *(fu-1);
+            for (; k < 8; k++) {
+                *fu = c;
+                fu += 1;
+            }
+            image += stride;
+#ifdef LOG_ME
+            printf("\n");
+#endif
+        }
+        if (j < 8) {
+            uint64_t c8 = *(((uint64_t*)full) + (j-1));
+            for (; j < 8; j++) *(((uint64_t*)full) + j) = c8;
+        }
+    }
+#ifdef LOG_ME
+    uint64_t *fx = (uint64_t*)full;
+    for (int fi = 0; fi < 8; fi++) printf("%016lx\n", *(fx++));
+#endif
+    return dbde_pack_8x8(full, 8, target);
+}
 
 video_header dbde_unpack_video_header(uint8_t *encoded) {
     video_header vh = *((video_header*)encoded);
@@ -213,6 +272,30 @@ int main(int argc, char **argv) {
     memset(out, 0, 64);
 
     int i = dbde_pack_8x8(example, 10, out);
+    printf("%x\n", i);
+    for (int j = 0; j < 8; j++) { 
+        printf("%016lx\n", *((int64_t*)(out + 8*j)));
+    }
+
+    printf("\n\n\n");
+
+    i = dbde_pack_8x8_partial(example + 8, 10, 2, 8, out);
+    printf("%x\n", i);
+    for (int j = 0; j < 8; j++) { 
+        printf("%016lx\n", *((int64_t*)(out + 8*j)));
+    }
+
+    printf("\n\n\n");
+
+    i = dbde_pack_8x8_partial(example + 8*10, 10, 8, 2, out);
+    printf("%x\n", i);
+    for (int j = 0; j < 8; j++) { 
+        printf("%016lx\n", *((int64_t*)(out + 8*j)));
+    }
+
+    printf("\n\n\n");
+
+    i = dbde_pack_8x8_partial(example + 8*10 + 8, 10, 2, 2, out);
     printf("%x\n", i);
     for (int j = 0; j < 8; j++) { 
         printf("%016lx\n", *((int64_t*)(out + 8*j)));
