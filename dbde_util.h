@@ -31,14 +31,20 @@ uint32_t dbde_encode_8x8(uint8_t *image, int stride, uint8_t *target);
 uint32_t dbde_encode_8x8_partial(uint8_t *image, int stride, int rightmargin, int downmargin, uint8_t *target);
 
 size_t dbde_pack_image(uint8_t *image, int W, int H, uint8_t *target);
+size_t dbde_pack_frame_header(frame_header fh, uint8_t *target);
+size_t dbde_pack_frame(uint64_t index, uint8_t *image);
+
+size_t dbde_pack_video_header(video_header vh, uint8_t *target);
+
+void dbde_unpack_8x8(uint8_t depth, uint8_t minval, uint8_t* packed, size_t stride, uint8_t *image);
+void dbde_unpack_8x8_partial(uint8_t depth, uint8_t minval, uint8_t* packed, size_t stride, int rightmargin, int downmargin, uint8_t* image);
+
 
 video_header dbde_unpack_video_header(uint8_t *encoded);
 
-size_t dbde_pack_video_header(video_header vh, uint8_t *encoded);
 
 frame_header dbde_unpack_frame_header(uint8_t *encoded, int length);
 
-size_t dbde_pack_frame_header(frame_header fh, uint8_t *encoded);
 
 dbde_data dbde_unpack_data(uint8_t *encoded, int length);
 
