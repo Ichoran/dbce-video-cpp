@@ -14,7 +14,7 @@ void p(__m128i x) {
     printf("%016lx\n%016lx\n\n", *((int64_t*)&x), *((int64_t*)(((char*)&x)+sizeof(int64_t))));
 }
 
-int dbde_pack_8x8(uint8_t *image, int stride, uint8_t *target) {
+uint32_t dbde_pack_8x8(uint8_t *image, int stride, uint8_t *target) {
     // Pack all the data into SSE data structures
     __m128i ab = _mm_set_epi64x(*((int64_t*)(image + stride)), *((int64_t*)image)); image += 2*stride;
     __m128i cd = _mm_set_epi64x(*((int64_t*)(image + stride)), *((int64_t*)image)); image += 2*stride;
@@ -74,10 +74,10 @@ int dbde_pack_8x8(uint8_t *image, int stride, uint8_t *target) {
 
     if ((I1 & 0x80) != 0) {
         // All bits required
-        *((__m128i*)target) = ab; target += sizeof(__m128i);
-        *((__m128i*)target) = cd; target += sizeof(__m128i);
-        *((__m128i*)target) = ef; target += sizeof(__m128i);
-        *((__m128i*)target) = gh;
+        _mm_storeu_si128((__m128i*)target, ab); target += sizeof(__m128i);
+        _mm_storeu_si128((__m128i*)target, cd); target += sizeof(__m128i);
+        _mm_storeu_si128((__m128i*)target, ef); target += sizeof(__m128i);
+        _mm_storeu_si128((__m128i*)target, gh);
         return 0x800 | I0;
     }
     else {
@@ -135,7 +135,7 @@ int dbde_pack_8x8(uint8_t *image, int stride, uint8_t *target) {
 }
 
 /** MUST have rightmargin >=  1 && downmargin >= 1, and must also have at least one of rightmargin < 8 && downmargin < 8! */
-int dbde_pack_8x8_partial(uint8_t *image, int stride, int rightmargin, int downmargin, uint8_t *target) {
+uint32_t dbde_pack_8x8_partial(uint8_t *image, int stride, int rightmargin, int downmargin, uint8_t *target) {
     uint8_t full[64];
     if (rightmargin >= 8) {
         int j = 0;
@@ -179,13 +179,58 @@ int dbde_pack_8x8_partial(uint8_t *image, int stride, int rightmargin, int downm
     return dbde_pack_8x8(full, 8, target);
 }
 
+size_t dbde_pack_image(uint8_t *image, int W, int H, uint8_t *target) {
+    int w = (W+7)/8;
+    int h = (H+7)/8;
+    int sz = 2*(4 + w*h)+4;
+    *((int*)target) = w*h; target += 4;
+    uint8_t *bd = target; target += w*h;
+    *((int*)target) = w*h; target += 4;
+    uint8_t *mi = target; target += w*h;
+    int *n64 = (int*)target; target += 4;
+    *n64 = 0;
+    int ww = W/8;
+    int hh = H/8;
+    int y = 0;
+    for (; y < hh; y++) {
+        int x = 0;
+        for (; x < ww; x++) {
+            uint32_t bdmi = dbde_pack_8x8(image + 8*(x + W*y), W, target);
+            uint8_t bi = bdmi >> 8;
+            target = target + ((int)bi)*8;
+            *(bd++) = bi;
+            *(mi++) = (uint8_t)(bdmi & 0xFF);
+            *n64 += bi;
+        }
+        if (x < w) {
+            uint32_t bdmi = dbde_pack_8x8_partial(image + 8*(x + W*y), W, W&0x7, 8, target);
+            uint8_t bi = bdmi >> 8;
+            target = target + ((int)bi)*8;
+            *(bd++) = bi;
+            *(mi++) = (uint8_t)(bdmi & 0xFF);
+            *n64 += bi;
+        }
+    }
+    if (y < h) {
+        for (int x = 0; x < w; x++) {
+            uint32_t bdmi = dbde_pack_8x8_partial(image + 8*(x + W*y), W, (x==ww) ? (W&0x7) : 8, H&0x7, target);
+            uint8_t bi = bdmi >> 8;
+            target = target + ((int)bi)*8;
+            *(bd++) = bi;
+            *(mi++) = (uint8_t)(bdmi & 0xFF);
+            *n64 += bi;
+        }
+    }
+    return sz + 8 * (*n64);
+}
+
 video_header dbde_unpack_video_header(uint8_t *encoded) {
     video_header vh = *((video_header*)encoded);
     return vh;
 }
 
 
-int dbde_pack_video_header(video_header vh, uint8_t *encoded) {
+size_t dbde_pack_video_header(video_header vh, uint8_t *encoded) {
     video_header* target = (video_header*)encoded;
     *target = vh;
     return sizeof(video_header);
@@ -199,7 +244,7 @@ frame_header dbde_unpack_frame_header(uint8_t *encoded, int length) {
     return fh;
 }
 
-int dbde_pack_frame_header(frame_header fh, uint8_t *encoded) {
+size_t dbde_pack_frame_header(frame_header fh, uint8_t *encoded) {
     frame_header* target = (frame_header*)encoded;
     *target = fh;
     return sizeof(frame_header);
@@ -309,19 +354,43 @@ int main(int argc, char **argv) {
         printf("%016lx\n", *((int64_t*)(out + 8*j)));
     }
 
-    uint32_t *big = (uint32_t*)calloc(1024*1024 + 2048, 4);
-    for (int bi = 0; bi < 1024*1024 + 2048; bi++) big[bi] = rand();
+#define XRES 2536
+#define YRES 2048
+
+#undef PIECEWISE
+
+#ifdef PIECEWISE
+    uint8_t *big = (uint8_t*)malloc(XRES*YRES + (XRES+YRES));
+    uint8_t *targ = (uint8_t*)malloc(8*(XRES*YRES + (XRES*YRES)/4 + XRES+YRES));
+    for (int bi = 0; bi < XRES*YRES + (XRES+YRES); bi++) big[bi] = rand();
     uint32_t *ix = ((uint32_t*)&(out[0]));
     uint32_t si = 0;
     uint32_t n = 0;
     int64_t ta4 = __rdtsc();
-    for (int ni = 0; ni < 1024*1024/16; ni++) {
-        dbde_pack_8x8(((uint8_t*)&(big[ni*16])), 2048, out);
-        si += *ix + *(ix+1) + *(ix+2) + *(ix+3) + *(ix+4) + *(ix+5) + *(ix+6) + *(ix+7);
-        n += 1;
+    for (int nj = 0; nj < YRES/8; nj++) {
+        for (int ni = 0; ni < XRES/8; ni++) {
+            dbde_pack_8x8(&(big[nj*XRES*8 + ni*8]), XRES, out);
+            si += *ix + *(ix+1) + *(ix+2) + *(ix+3) + *(ix+4) + *(ix+5) + *(ix+6) + *(ix+7);
+            n += 1;
+        }
     }
     int64_t tz4 = __rdtsc();
     printf("%d %d\n", si, n);
+#else
+    uint8_t *big = (uint8_t*)malloc(XRES*YRES + (XRES+YRES));
+    uint8_t *targ = (uint8_t*)malloc(XRES*YRES + (XRES*YRES)/16 + 12 + XRES+YRES);
+    for (int bi = 0; bi < XRES*YRES + (XRES+YRES); bi++) big[bi] = rand() & 0xFF;
+    uint32_t si = 0;
+    uint32_t n = 0;
+    int64_t ta4 = __rdtsc();
+    si = dbde_pack_image(big, XRES, YRES, targ);
+    n = *((int*)(targ + si/2));
+    int64_t tz4 = __rdtsc();
+    printf("%d %d\n", si, n);
+#endif    
 
-    printf("\n\n%d %d %d %d\n%f\n", (int)(tz0-ta0), (int)(tz1-ta1), (int)(tz2-ta2), (int)(tz3-ta3), (tz4-ta4)/((double)n));
+#undef YRES
+#undef XRES
+
+    printf("\n\n%d %d %d %d\n%f %f\n", (int)(tz0-ta0), (int)(tz1-ta1), (int)(tz2-ta2), (int)(tz3-ta3), (tz4-ta4)/((double)n), 1.0/((tz4-ta4)*3e-10));
 }

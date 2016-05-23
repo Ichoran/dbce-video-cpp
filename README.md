@@ -45,7 +45,7 @@ The frame header is 20 bytes and contains no information essential for recovery 
 
 #### How images are packed
 
-Images are tiled in 8x8 blocks in row major order and are "minimum value padded" in that if number of rows or columns is not divisible by 8, the part of the 8x8 block that is missing is filled in left-to-right with the last valid value to get full rows, and then any missing rows are filled in with the last full row.
+Images are tiled in 8x8 blocks in row major order and are "constant padded" in that if number of rows or columns is not divisible by 8, the part of the 8x8 block that is missing is filled in left-to-right with the last valid value to get full rows, and then any missing rows are filled in with the last full row.
 
 Within each tile, the minimum and maximum value is computed.  The minimum number of bits needed to store that range is used, and the bits are packed into U64s (least significant first).  Note that because there are integer numbers of bits and 64 pixels, there will always be an integer number of U64s to store the entire data.
 
