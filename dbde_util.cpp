@@ -247,55 +247,43 @@ void dbde_unpack_8x8_partial(uint8_t depth, uint8_t minval, uint8_t* packed, siz
     }
 }
 
-video_header dbde_unpack_video_header(uint8_t *encoded) {
-    video_header vh = *((video_header*)encoded);
-    return vh;
+size_t dbde_unpack_image(uint8_t **packed, int W, int H, uint8_t *image) {
+    uint8_t *pack = *packed;
+    int w = (W+7)/8;
+    int h = (H+7)/8;
+    int32_t nb = *((int32_t*)pack); pack += sizeof(int32_t);
+    if (nb != w*h) return 0;
+    uint8_t *b = pack; pack += nb;
+    int32_t nm = *((int32_t*)pack); pack += sizeof(int32_t);
+    if (nm != w*h) return 0;
+    uint8_t *m = pack; pack += nm;
+    int ww = W/8;
+    int hh = H/8;
+    int y = 0;
+    for (; y < hh; y++) {
+        int x = 0;
+        for (; x < ww; x++) {
+            uint8_t bi = *(b++);
+            dbde_unpack_8x8(bi, *(m++), pack, W, image + 8*(y*W + x));
+            pack += 8*((int)bi);
+        }
+        if (x < w) {
+            uint8_t bi = *(b++);
+            dbde_unpack_8x8_partial(bi, *(m++), pack, W, W & 0x7, 8, image + 8*(y*W + x));
+            pack += 8*((int)bi);
+        }
+    }
+    if (y < h) {
+        for (int x = 0; x < w; x++) {
+            uint8_t bi = *(b++);
+            dbde_unpack_8x8_partial(bi, *(m++), pack, W, (x==ww) ? (W & 0x7) : 8, H & 0x7, image + 8*(y*W + x));
+            pack += 8*((int)bi);
+        }
+    }
+    size_t result = pack - *packed;
+    *packed = pack;
+    return result;
 }
-
-
-
-
-frame_header dbde_unpack_frame_header(uint8_t *encoded, int length) {
-    frame_header fh;
-    if (length >= sizeof(frame_header)) fh = *((frame_header*)encoded);
-    else { fh.u64s = 0; }
-    return fh;
-}
-
-dbde_data dbde_unpack_data(uint8_t *encoded) {
-    dbde_data dd;
-    dd.bits_len = *((int32_t*)encoded);
-    encoded += sizeof(int32_t);
-    dd.bits = encoded;
-    encoded += dd.bits_len;
-    dd.mins_len = *((int32_t*)encoded);
-    encoded += sizeof(int32_t);
-    dd.mins = encoded;
-    encoded += dd.mins_len;
-    dd.data_len = *((int32_t*)encoded);
-    encoded += dd.data_len * sizeof(uint64_t);
-    return dd;
-}
-
-int dbde_pack_data(dbde_data dd, uint8_t *encoded) {
-    *((int32_t*)encoded) = dd.bits_len;     encoded += sizeof(int32_t);
-    memcpy(encoded, dd.bits, dd.bits_len);  encoded += dd.bits_len;
-    *((int32_t*)encoded) = dd.mins_len;     encoded += sizeof(int32_t);
-    memcpy(encoded, dd.mins, dd.mins_len);  encoded += dd.mins_len;
-    *((int32_t*)encoded) = dd.data_len;     encoded += sizeof(int32_t);
-    memcpy(encoded, dd.data, sizeof(uint64_t)*dd.data_len);
-    return 3*sizeof(uint32_t) + dd.bits_len + dd.mins_len * sizeof(uint64_t)*dd.data_len;
-}
-
-/*
-void dbde_decode_image(dbde_data dd, int W, int H, uint8_t *image);
-
-uint8_t* dbde_decode_image_alloc(dbde_data dd, int W, int H);
-
-void dbde_encode_image(uint8_t *image, int W, int H, dbde_data& dd);
-
-dbde_data* dbde_encode_image_alloc(uint8_t *image, int W, int H);
-*/
 
 #ifdef DBDE_UTIL_MAIN
 
