@@ -247,8 +247,8 @@ void dbde_unpack_8x8_partial(uint8_t depth, uint8_t minval, uint8_t* packed, siz
     }
 }
 
-size_t dbde_unpack_image(uint8_t **packed, int W, int H, uint8_t *image) {
-    uint8_t *pack = *packed;
+size_t dbde_unpack_image(uint8_t *packed, int W, int H, uint8_t *image) {
+    uint8_t *pack = packed;
     int w = (W+7)/8;
     int h = (H+7)/8;
     int32_t nb = *((int32_t*)pack); pack += sizeof(int32_t);
@@ -257,6 +257,9 @@ size_t dbde_unpack_image(uint8_t **packed, int W, int H, uint8_t *image) {
     int32_t nm = *((int32_t*)pack); pack += sizeof(int32_t);
     if (nm != w*h) return 0;
     uint8_t *m = pack; pack += nm;
+    int32_t n64 = *((int32_t*)pack); pack += sizeof(int32_t);
+    for (int i=0; i < w*h; i++) n64 -= b[i];
+    if (n64 != 0) return 0;
     int ww = W/8;
     int hh = H/8;
     int y = 0;
@@ -280,24 +283,29 @@ size_t dbde_unpack_image(uint8_t **packed, int W, int H, uint8_t *image) {
             pack += 8*((int)bi);
         }
     }
-    size_t result = pack - *packed;
-    *packed = pack;
-    return result;
+    return pack - packed;
+}
+
+frame_header dbde_unpack_frame(uint8_t **packed, int W, int H, uint8_t *image) {
+    frame_header fh = *((frame_header*)*packed);
+    if (fh.u64s != 2) { fh.u64s = -1; return fh; }
+    *packed += sizeof(frame_header);
+    size_t n = dbde_unpack_image(*packed, W, H, image);
+    if (n == 0) { fh.u64s = -1; }
+    else { *packed += n; }
+    return fh;
+}
+
+video_header dbde_unpack_frame(uint8_t **packed) {
+    video_header vh = *((video_header*)*packed);
+    if (vh.u64s != 3) { vh.u64s = -1; }
+    else { *packed += sizeof(video_header); }
+    return vh;
 }
 
 #ifdef DBDE_UTIL_MAIN
 
 int main(int argc, char **argv) {
-    uint8_t data[] = { 4, 2, 3, 4, 5, 6, 7, 8,
-                       9,10,11,15,13,14, 2,12,
-                       4, 4, 3, 7, 9,15, 2, 6,
-                      11,14,33, 3, 4,15, 4, 15,
-                      15,14,13,12,11,10, 9, 8,
-                       7, 6, 5, 4, 3, 3, 3, 3,
-                      22,18, 4,16, 8, 5,12,11,
-                      14,16,14,16,14,16,14,16
-                     };
-
     uint8_t example[] = 
         {   25, 27, 23, 29, 22, 24, 29, 23, 25, 24,
             22, 24, 21, 25, 22, 27, 28, 21, 27, 26,
@@ -400,32 +408,48 @@ int main(int argc, char **argv) {
         }
     }
     int64_t tz4 = __rdtsc();
+    int64_t ta5 = tz4;
+    int64_t tz5 = ta5;
     printf("%d %d\n", si, n);
 #else
     uint8_t *big = (uint8_t*)malloc(XRES*YRES + (XRES+YRES));
     uint8_t *targ = (uint8_t*)malloc(XRES*YRES + (XRES*YRES)/16 + 12 + XRES+YRES + 20);
-    for (int bi = 0; bi < XRES*YRES + (XRES+YRES); bi++) big[bi] = rand() & 0xFF;
+    uint8_t *re = (uint8_t*)malloc(XRES*YRES + (XRES+YRES));
+    for (int bi = 0; bi < XRES*YRES + (XRES+YRES); bi++) big[bi] = rand() & 0x7F;
     uint32_t si = 0;
     uint32_t n = 0;
     int64_t ta4 = __rdtsc();
-    si = dbde_pack_frame(1, big, XRES, YRES, targ);
+    int nX = XRES;
+    int nY = YRES;
+    si = dbde_pack_frame(1, big, nX, nY, targ);
     n = *((int*)(targ + si/2));
     int64_t tz4 = __rdtsc();
-    printf("%x %d\n", si, n);
-    n = ((XRES+7)/8) * ((YRES+7)/8);
+    int64_t ta5 = tz4;
+    uint8_t *targv = targ;
+    dbde_unpack_frame(&targv, nX, nY, re);
+    printf("%ld %ld\n",(long)si ,targv - targ);
+    int64_t tz5 = __rdtsc();
+    int wrong = 0;
+    for (int y = 0; y < nY; y++)
+        for (int x = 0; x < nX; x++)
+            if (big[y*nX+x] != re[y*nX+x]) wrong++;
+    printf("%x %d   !! %d of %d\n", si, n, wrong, nX*nY);
+    n = ((nX+7)/8) * ((nY+7)/8);
 #endif    
 
 #undef YRES
 #undef XRES
 
     printf(
-        "\n\n%d %d %d %d\n%f %f\n",
+        "\n\n%d %d %d %d\n%f %f\n%f %f\n",
         (int)(tz0-ta0),
         (int)(tz1-ta1),
         (int)(tz2-ta2),
         (int)(tz3-ta3),
         (tz4-ta4)/((double)n),
-        1.0/((tz4-ta4)*3e-10)
+        1.0/((tz4-ta4)*3e-10),
+        (tz5-ta5)/((double)n),
+        1.0/((tz5-ta5)*3e-10)
     );
 }
 
