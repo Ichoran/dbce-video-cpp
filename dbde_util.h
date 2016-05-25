@@ -18,15 +18,6 @@ struct frame_header {
     uint64_t reserved0;
 };
 
-struct dbde_data {
-    uint32_t bits_len;
-    uint8_t *bits;
-    uint32_t mins_len;
-    uint8_t *mins;
-    uint32_t data_len;
-    uint64_t *data;
-};
-
 uint32_t dbde_encode_8x8(uint8_t *image, int stride, uint8_t *target);
 uint32_t dbde_encode_8x8_partial(uint8_t *image, int stride, int rightmargin, int downmargin, uint8_t *target);
 

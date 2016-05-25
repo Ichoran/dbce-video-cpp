@@ -51,7 +51,7 @@ Within each tile, the minimum and maximum value is computed.  The minimum number
 
 #### Data layout
 
-Let us use `W` to denote the width in pixels of the entire image, and `H` to denote the height.  Then there are `w = ceil(W/8)` blocks across and `h = ceil(H/8)` blocks down, for a total if `h*w` blocks.
+Let us use `W` to denote the width in pixels of the entire image, and `H` to denote the height.  Then there are `w = ceil(W/8)` blocks across and `h = ceil(H/8)` blocks down, for a total of `h*w` blocks.
 
 | Data type |  Size (bytes) |  Meaning |
 |-----------|---------|----------|

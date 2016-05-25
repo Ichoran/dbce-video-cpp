@@ -199,7 +199,6 @@ size_t dbde_pack_video_header(video_header vh, uint8_t *target) {
 void dbde_unpack_8x8(uint8_t depth, uint8_t minval, uint8_t* packed, size_t stride, uint8_t *image) {
     __m128i lo = _mm_set1_epi8(minval);
     if (depth == 0) {
-        printf("Depth is 0\n");
         int64_t l = _mm_cvtsi128_si64(lo);
         for (int j = 0; j < 8; j++) { *((int64_t*)image) = l; image += stride; }        
     }
@@ -304,6 +303,36 @@ video_header dbde_unpack_frame(uint8_t **packed) {
 }
 
 #ifdef DBDE_UTIL_MAIN
+
+bool dbde_util_unit_test() {
+#define DUUT_FAIL free(src); free(pack); free(dst); return false
+    int nX = 8 + (rand()%(16384-8));
+    int nY = 8 + (rand()%(16384-8));
+    if (nY*nX > 32*1024*1024) nY = (32*1024*1024)/nX;
+    int bI = rand()%9;
+    int mI = rand()%(256 - (1 << bI));
+    int w = (nX+7)/8;
+    int h = (nY+7)/8;
+    uint8_t *src = (uint8_t*)malloc(nX * nY);
+    uint8_t *pack = (uint8_t*)malloc(w*h*64 + w*h*2 + sizeof(frame_header) + 12 + 1024);
+    uint8_t *dst = (uint8_t*)malloc(nX * nY);
+    for (int i = 0; i < nX*nY; i++) src[i] = (uint8_t)(mI + (rand() % (1 << bI)));
+    uint64_t ix = rand() | (((uint64_t) rand()) << 32);
+    int si = dbde_pack_frame(ix, src, nX, nY, pack);
+    uint8_t *packv = pack;
+    frame_header fh = dbde_unpack_frame(&packv, nX, nY, dst);
+    if (fh.u64s != 2) { printf("Error."); DUUT_FAIL; }
+    if (fh.index != ix) { printf("Bad index %llx (needed %llx)\n", (long long)fh.index, (long long)ix); DUUT_FAIL; }
+    int wrong = 0;
+    for (int i = 0; i < nX * nY; i++) if (src[i] != dst[i]) wrong += 1;
+    if (wrong > 0) { printf("%d of %d pixels mismatched, %d bits %d min\n", wrong, nX*nY, bI, mI); DUUT_FAIL; }
+    if (packv - pack > w*h*64 + w*h*2 + sizeof(frame_header) + 12) {
+        printf("Overshot by %ld bytes\n", (packv - pack) - (w*h*64 + w*h*2 + sizeof(frame_header) + 12));
+        DUUT_FAIL;
+    }
+    return true;
+#undef DUUT_FAIL
+}
 
 int main(int argc, char **argv) {
     uint8_t example[] = 
@@ -415,7 +444,7 @@ int main(int argc, char **argv) {
     uint8_t *big = (uint8_t*)malloc(XRES*YRES + (XRES+YRES));
     uint8_t *targ = (uint8_t*)malloc(XRES*YRES + (XRES*YRES)/16 + 12 + XRES+YRES + 20);
     uint8_t *re = (uint8_t*)malloc(XRES*YRES + (XRES+YRES));
-    for (int bi = 0; bi < XRES*YRES + (XRES+YRES); bi++) big[bi] = rand() & 0x7F;
+    for (int bi = 0; bi < XRES*YRES + (XRES+YRES); bi++) big[bi] = rand() & 0xFF;
     uint32_t si = 0;
     uint32_t n = 0;
     int64_t ta4 = __rdtsc();
@@ -451,6 +480,8 @@ int main(int argc, char **argv) {
         (tz5-ta5)/((double)n),
         1.0/((tz5-ta5)*3e-10)
     );
+
+    for (int i = 0; i < 1024; i++) if (!dbde_util_unit_test()) { printf("Failed iteration %d\n", i); return 1; }
 }
 
 #endif
