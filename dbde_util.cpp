@@ -12,7 +12,7 @@
  * Routines to pack image data into DBDE format *
  ************************************************/
 
-uint32_t dbde_pack_8x8(uint8_t *image, int stride, uint8_t *target) {
+ uint32_t dbde_pack_8x8(uint8_t *image, int stride, uint8_t *target) {
     // Pack all the data into SSE data structures
     __m128i ab = _mm_set_epi64x(*((int64_t*)(image + stride)), *((int64_t*)image)); image += 2*stride;
     __m128i cd = _mm_set_epi64x(*((int64_t*)(image + stride)), *((int64_t*)image)); image += 2*stride;
@@ -72,22 +72,21 @@ uint32_t dbde_pack_8x8(uint8_t *image, int stride, uint8_t *target) {
         ef = _mm_madd_epi16(x, ef);                // Now 4 ints across
         gh = _mm_madd_epi16(x, gh);                // Now 4 ints across
 
-
-        int *i;
+        uint32_t *i;
         int kk = 0;
         uint64_t p = 0;
         k = k << 2;
         __m128i *packs[] = { &ab, &cd, &ef, &gh };
         for (int m = 0; m < 4; m++) {
-            i = (int*)packs[m];
+            i = (uint32_t*)packs[m];
             for (int mm = 0; mm < 4; mm++) {
                 p = p | (((uint64_t)(*i)) << kk);
                 kk += k;
-                if (kk >= 64) {
-                    *((uint64_t*)target) = p;
-                    target += sizeof(uint64_t);
-                    p = (k > 64) ? ((*i) >> (96-kk)) : 0;
-                    kk -= 64;
+                if (kk >= 32) {
+                    *((uint32_t*)target) = (uint32_t)p;
+                    target += sizeof(uint32_t);
+                    p = (kk > 32) ? (p >> 32) : 0;
+                    kk -= 32;
                 }
                 i++;
             }
@@ -211,7 +210,7 @@ void dbde_unpack_8x8(uint8_t depth, uint8_t minval, uint8_t* packed, size_t stri
             int nb = 32;
             for (int i = 0; i < 64; i++) {
                 if (nb < depth) {
-                    v = v | ((*(data++)) << nb);
+                    v = v | (((uint64_t)(*(data++))) << nb);
                     nb += 32;
                 }
                 temp[i] = (uint8_t)(v & m);
@@ -305,12 +304,16 @@ video_header dbde_unpack_frame(uint8_t **packed) {
 #ifdef DBDE_UTIL_MAIN
 
 bool dbde_util_unit_test() {
-#define DUUT_FAIL free(src); free(pack); free(dst); return false
+
+#define DUUT_FAIL printf("%d %d %d %d %d %d\n", nX, nY, bI, mI, w, h); free(src); free(pack); free(dst); return false
+
     int nX = 8 + (rand()%(16384-8));
     int nY = 8 + (rand()%(16384-8));
+    nX = 8;
+    nY = 8;
     if (nY*nX > 32*1024*1024) nY = (32*1024*1024)/nX;
     int bI = rand()%9;
-    int mI = rand()%(256 - (1 << bI));
+    int mI = (bI < 8) ? rand()%(256 - (1 << bI)) : 0;
     int w = (nX+7)/8;
     int h = (nY+7)/8;
     uint8_t *src = (uint8_t*)malloc(nX * nY);
@@ -321,7 +324,7 @@ bool dbde_util_unit_test() {
     int si = dbde_pack_frame(ix, src, nX, nY, pack);
     uint8_t *packv = pack;
     frame_header fh = dbde_unpack_frame(&packv, nX, nY, dst);
-    if (fh.u64s != 2) { printf("Error."); DUUT_FAIL; }
+    if (fh.u64s != 2) { printf("Error.\n"); DUUT_FAIL; }
     if (fh.index != ix) { printf("Bad index %llx (needed %llx)\n", (long long)fh.index, (long long)ix); DUUT_FAIL; }
     int wrong = 0;
     for (int i = 0; i < nX * nY; i++) if (src[i] != dst[i]) wrong += 1;
@@ -339,7 +342,7 @@ int main(int argc, char **argv) {
         {   25, 27, 23, 29, 22, 24, 29, 23, 25, 24,
             22, 24, 21, 25, 22, 27, 28, 21, 27, 26,
             25, 26, 22, 29, 25, 20, 28, 23, 26, 25,
-            19, 23, 25, 21, 28, 19, 22, 25, 25, 27,
+            19, 23, 25, 41, 28, 19, 22, 25, 25, 27,
             27, 25, 30, 28, 25, 23, 27, 26, 24, 24,
             31, 30, 31, 28, 29, 26, 24, 25, 27, 26,
             30, 28, 32, 25, 28, 27, 28, 27, 26, 26,
@@ -381,7 +384,6 @@ int main(int argc, char **argv) {
             ex
         );
     }
-
     printf("\n\n\n");
 
     int64_t ta2 = __rdtsc();
