@@ -2,7 +2,7 @@
   * Copyright 2016 by Rex Kerr and Calico Life Sciences   *
   * This file distributed under the Apache License 2.0    **/
 
-#include <x86intrin.h>
+#include <smmintrin.h>
 #include <stdint.h>
 #include <string.h>
 #include <stdio.h>
@@ -336,6 +336,9 @@ bool dbde_util_unit_test() {
     return true;
 #undef DUUT_FAIL
 }
+
+// Include down here to avoid letting the guys above know about operations we may have available on a dev machine
+#include <x86intrin.h>
 
 int main(int argc, char **argv) {
     uint8_t example[] = 
