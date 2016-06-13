@@ -198,7 +198,11 @@ size_t dbde_pack_video_header(video_header vh, uint8_t *target) {
 void dbde_unpack_8x8(uint8_t depth, uint8_t minval, uint8_t* packed, size_t stride, uint8_t *image) {
     __m128i lo = _mm_set1_epi8(minval);
     if (depth == 0) {
+#ifdef __x86_64__
         int64_t l = _mm_cvtsi128_si64(lo);
+#else
+        int64_t l = _mm_cvtsi128_si32(lo) | (((int64_t)_mm_extract_epi32(lo, 1)) << 32);  // Efficiency?
+#endif
         for (int j = 0; j < 8; j++) { *((int64_t*)image) = l; image += stride; }        
     }
     else {
@@ -221,17 +225,37 @@ void dbde_unpack_8x8(uint8_t depth, uint8_t minval, uint8_t* packed, size_t stri
         }
         __m128i x;
         x = _mm_add_epi8(lo, _mm_loadu_si128((__m128i*)packed)); packed += sizeof(__m128i);
+#ifdef __x86_64__ 
         *((int64_t*)image) = _mm_cvtsi128_si64(x); image += stride;
         *((int64_t*)image) = _mm_extract_epi64(x, 1); image += stride;
+#else
+        *((int32_t*)image) = _mm_cvtsi128_si32(x); *(((int32_t*)image)+1) = _mm_extract_epi32(x, 1); image += stride;
+        *((int32_t*)image) = _mm_extract_epi32(x, 2); *(((int32_t*)image)+1) = _mm_extract_epi32(x, 3); image += stride;
+#endif
         x = _mm_add_epi8(lo, _mm_loadu_si128((__m128i*)packed)); packed += sizeof(__m128i);
+#ifdef __x86_64__ 
         *((int64_t*)image) = _mm_cvtsi128_si64(x); image += stride;
         *((int64_t*)image) = _mm_extract_epi64(x, 1); image += stride;
+#else
+        *((int32_t*)image) = _mm_cvtsi128_si32(x); *(((int32_t*)image)+1) = _mm_extract_epi32(x, 1); image += stride;
+        *((int32_t*)image) = _mm_extract_epi32(x, 2); *(((int32_t*)image)+1) = _mm_extract_epi32(x, 3); image += stride;
+#endif
         x = _mm_add_epi8(lo, _mm_loadu_si128((__m128i*)packed)); packed += sizeof(__m128i);
+#ifdef __x86_64__ 
         *((int64_t*)image) = _mm_cvtsi128_si64(x); image += stride;
         *((int64_t*)image) = _mm_extract_epi64(x, 1); image += stride;
+#else
+        *((int32_t*)image) = _mm_cvtsi128_si32(x); *(((int32_t*)image)+1) = _mm_extract_epi32(x, 1); image += stride;
+        *((int32_t*)image) = _mm_extract_epi32(x, 2); *(((int32_t*)image)+1) = _mm_extract_epi32(x, 3); image += stride;
+#endif
         x = _mm_add_epi8(lo, _mm_loadu_si128((__m128i*)packed));
+#ifdef __x86_64__ 
         *((int64_t*)image) = _mm_cvtsi128_si64(x); image += stride;
-        *((int64_t*)image) = _mm_extract_epi64(x, 1);      
+        *((int64_t*)image) = _mm_extract_epi64(x, 1);
+#else
+        *((int32_t*)image) = _mm_cvtsi128_si32(x); *(((int32_t*)image)+1) = _mm_extract_epi32(x, 1); image += stride;
+        *((int32_t*)image) = _mm_extract_epi32(x, 2); *(((int32_t*)image)+1) = _mm_extract_epi32(x, 3);
+#endif
     }
 }
 
