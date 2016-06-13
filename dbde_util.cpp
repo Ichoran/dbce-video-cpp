@@ -339,28 +339,42 @@ video_header dbde_unpack_video_header(uint8_t **packed) {
 }
 
 
-dbde_file_walker dbde_start_file_walk(const char* name, size_t max_img_size, video_header *vh) {
+dbde_file_walker dbde_start_file_walk(const char* name, int frames_buffered, video_header *vh) {
+    if (frames_buffered < 1) frames_buffered = 2;
+    uint8_t tinybuf[28];   // Just the header!
     FILE *f = fopen(name, "rb");
     if (!f) return (dbde_file_walker){NULL, 0, 0, 0, 0, 1, 1, NULL};
     dbde_file_walker w = (dbde_file_walker){f, 0, 0, 0, 0, 1, 1, NULL};
-    w.N = 2*max_img_size + (max_img_size >> 2) + sizeof(frame_header) + sizeof(video_header) + 1024;
-    w.buffer = (uint8_t*)malloc(w.N);
-    uint8_t *buf = w.buffer;
-    w.n = fread(w.buffer, 1, w.N, w.fptr);
-    if (ferror(w.fptr) || w.n < sizeof(video_header)) { fclose(w.fptr); w.fptr = NULL; }
+    int n = fread(tinybuf, 1, 28, w.fptr);
+    uint8_t *buf = tinybuf;
     *vh = dbde_unpack_video_header(&buf);
-    if (vh->u64s != 3) { fclose(w.fptr); w.fptr = NULL; }
-    w.i = buf - w.buffer;
+    if (vh->u64s != 3 || (buf - tinybuf) != 28) { fclose(w.fptr); w.fptr = NULL; return w; }
+    uint64_t npix = ((vh->height * vh->width) * frames_buffered);
+    w.N = npix + (npix/8) + ((uint64_t)frames_buffered)*32;
+    if (vh->height == 0 || vh->width == 0 ||
+        vh->height > 0x37FFFFFF || vh->width > 0x37FFFFFF ||
+        (vh->height * vh->width) > 0x37FFFFFF ||
+        w.N >= 0x7FFFFFFF
+    ) {
+        fclose(w.fptr);
+        w.fptr = NULL;
+        return w;
+    }
+    w.buffer = (uint8_t*)malloc(w.N);
+    w.n = fread(w.buffer, 1, w.N, w.fptr);
+    w.i = 0;
+    if (ferror(w.fptr)) { fclose(w.fptr); w.fptr = NULL; }
     w.width = (int32_t)vh->width;
     w.height = (int32_t)vh->height;
-    if (w.width <= 0 || w.height <= 0) { fclose(w.fptr); w.fptr = NULL; }
     return w;
 }
 
 // Make sure there is always plenty of buffer past the current index.
 // Ideally we achieve this by reading the file, but whatever.
 bool dbde_advance_file_buffer(dbde_file_walker &w) {
-    if (w.n > w.N/2) {
+    int required = w.height * w.width;
+    required += required/8 + 32;
+    if (w.n - w.i < required) {
         if (w.i < w.n) memmove(w.buffer, w.buffer + w.i, w.n - w.i);
         w.n -= w.i;
         w.i = 0;
@@ -373,9 +387,9 @@ bool dbde_advance_file_buffer(dbde_file_walker &w) {
 
 bool dbde_walk_a_file(dbde_file_walker *walker, frame_header *fh, uint8_t *image) {
     size_t npix = (size_t)(walker->width*walker->height);
-    if (walker->n - walker->i < (npix + npix/8 + 512)) {
+    if (walker->n - walker->i < (npix + npix/8 + 32)) {
         if (!dbde_advance_file_buffer(*walker)) { fclose(walker->fptr); walker->fptr = NULL; return false; }
-        if (walker->n - walker->i < sizeof(frame_header)) return false;
+        if (walker->n - walker->i < 20) return false;
     }
     uint8_t *buf = walker->buffer + walker->i;
     *fh = dbde_unpack_frame(&buf, walker->width, walker->height, image);
@@ -585,7 +599,7 @@ int main(int argc, char **argv) {
     video_header vh;
     frame_header fh;
     uint8_t *image = (uint8_t*)malloc(4096*4096);
-    dbde_file_walker dfw = dbde_start_file_walk(DBDE_READ_FILE_TEST, 8192*8192, &vh);
+    dbde_file_walker dfw = dbde_start_file_walk(DBDE_READ_FILE_TEST, 16, &vh);
     if (!dfw.fptr) printf("FAILED OPEN\n");
     else {
         int i = 0;

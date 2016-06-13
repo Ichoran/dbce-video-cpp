@@ -46,7 +46,7 @@ struct dbde_file_walker {
     uint8_t *buffer; // The buffer
 };
 
-dbde_file_walker dbde_start_file_walk(const char* name, size_t max_img_size, video_header *vh);
+dbde_file_walker dbde_start_file_walk(const char* name, int frames_buffered, video_header *vh);
 bool dbde_walk_a_file(dbde_file_walker *walker, frame_header* fh, uint8_t *image);
 void dbde_end_file_walk(dbde_file_walker *walker);
 
