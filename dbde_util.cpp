@@ -200,10 +200,11 @@ void dbde_unpack_8x8(uint8_t depth, uint8_t minval, uint8_t* packed, size_t stri
     if (depth == 0) {
 #ifdef __x86_64__
         int64_t l = _mm_cvtsi128_si64(lo);
-#else
-        int64_t l = _mm_cvtsi128_si32(lo) | (((int64_t)_mm_extract_epi32(lo, 1)) << 32);  // Efficiency?
-#endif
         for (int j = 0; j < 8; j++) { *((int64_t*)image) = l; image += stride; }        
+#else
+        int32_t l = _mm_cvtsi128_si32(lo);
+        for (int j = 0; j < 8; j++) { *((int32_t*)image) = l; *(((int32_t*)image)+1) = l; image += stride; }
+#endif
     }
     else {
         uint8_t temp[64];
