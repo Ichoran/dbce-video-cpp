@@ -35,4 +35,19 @@ frame_header dbde_unpack_frame(uint8_t **packed, int W, int H, uint8_t *image);
 
 video_header dbde_unpack_video_header(uint8_t **packed);
 
+struct dbde_file_walker {
+    FILE *fptr;      // File we're reading from
+    int32_t frames;  // Number of frames read
+    size_t i;        // Index of unread data in buffer
+    size_t n;        // Index of good data in buffer
+    size_t N;        // Size of buffer in memory
+    int32_t width;   // Width of images in file
+    int32_t height;  // Height of images in file
+    uint8_t *buffer; // The buffer
+};
+
+dbde_file_walker dbde_start_file_walk(const char* name, size_t max_img_size, video_header *vh);
+bool dbde_walk_a_file(dbde_file_walker *walker, frame_header* fh, uint8_t *image);
+void dbde_end_file_walk(dbde_file_walker *walker);
+
 #endif

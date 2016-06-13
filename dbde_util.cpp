@@ -173,8 +173,11 @@ size_t dbde_pack_image(uint8_t *image, int W, int H, uint8_t *target) {
 }
 
 size_t dbde_pack_frame_header(frame_header fh, uint8_t *target) {
-    *((frame_header*)target) = fh;
-    return sizeof(frame_header);
+    size_t offset = 0;
+    *((int32_t*)target) = fh.u64s; offset += 4;
+    *((uint64_t*)(target + offset)) = fh.index; offset += 8;
+    *((uint64_t*)(target + offset)) = fh.reserved0; offset += 8;
+    return offset;
 }
 
 size_t dbde_pack_frame(uint64_t index, uint8_t *image, int W, int H, uint8_t *target) {
@@ -186,8 +189,12 @@ size_t dbde_pack_frame(uint64_t index, uint8_t *image, int W, int H, uint8_t *ta
 }
 
 size_t dbde_pack_video_header(video_header vh, uint8_t *target) {
-    *((video_header*)target) = vh;
-    return sizeof(video_header);
+    size_t offset = 0;
+    *((int32_t*)target) = vh.u64s; offset += 4;
+    *((uint64_t*)(target + offset)) = vh.height; offset += 8;
+    *((uint64_t*)(target + offset)) = vh.width; offset += 8;
+    *((uint64_t*)(target + offset)) = vh.frame_hz; offset += 8;
+    return offset;
 }
 
 
@@ -310,21 +317,80 @@ size_t dbde_unpack_image(uint8_t *packed, int W, int H, uint8_t *image) {
 }
 
 frame_header dbde_unpack_frame(uint8_t **packed, int W, int H, uint8_t *image) {
-    frame_header fh = *((frame_header*)*packed);
+    frame_header fh;
+    fh.u64s = *((int*)*packed); *packed += 4;
+    fh.index = *((uint64_t*)*packed); *packed += 8;
+    fh.reserved0 = *((uint64_t*)*packed); *packed += 8;
     if (fh.u64s != 2) { fh.u64s = -1; return fh; }
-    *packed += sizeof(frame_header);
     size_t n = dbde_unpack_image(*packed, W, H, image);
     if (n == 0) { fh.u64s = -1; }
     else { *packed += n; }
     return fh;
 }
 
-video_header dbde_unpack_frame(uint8_t **packed) {
-    video_header vh = *((video_header*)*packed);
+video_header dbde_unpack_video_header(uint8_t **packed) {
+    video_header vh;
+    vh.u64s = *((int*)*packed); *packed += 4;
+    vh.height = *((uint64_t*)*packed); *packed += 8;
+    vh.width = *((uint64_t*)*packed); *packed += 8;
+    vh.frame_hz = *((uint64_t*)*packed); *packed += 8;
     if (vh.u64s != 3) { vh.u64s = -1; }
-    else { *packed += sizeof(video_header); }
     return vh;
 }
+
+
+dbde_file_walker dbde_start_file_walk(const char* name, size_t max_img_size, video_header *vh) {
+    FILE *f = fopen(name, "rb");
+    if (!f) return (dbde_file_walker){NULL, 0, 0, 0, 0, 1, 1, NULL};
+    dbde_file_walker w = (dbde_file_walker){f, 0, 0, 0, 0, 1, 1, NULL};
+    w.N = 2*max_img_size + (max_img_size >> 2) + sizeof(frame_header) + sizeof(video_header) + 1024;
+    w.buffer = (uint8_t*)malloc(w.N);
+    uint8_t *buf = w.buffer;
+    w.n = fread(w.buffer, 1, w.N, w.fptr);
+    if (ferror(w.fptr) || w.n < sizeof(video_header)) { fclose(w.fptr); w.fptr = NULL; }
+    *vh = dbde_unpack_video_header(&buf);
+    if (vh->u64s != 3) { fclose(w.fptr); w.fptr = NULL; }
+    w.i = buf - w.buffer;
+    w.width = (int32_t)vh->width;
+    w.height = (int32_t)vh->height;
+    if (w.width <= 0 || w.height <= 0) { fclose(w.fptr); w.fptr = NULL; }
+    return w;
+}
+
+// Make sure there is always plenty of buffer past the current index.
+// Ideally we achieve this by reading the file, but whatever.
+bool dbde_advance_file_buffer(dbde_file_walker &w) {
+    if (w.n > w.N/2) {
+        if (w.i < w.n) memmove(w.buffer, w.buffer + w.i, w.n - w.i);
+        w.n -= w.i;
+        w.i = 0;
+    }
+    size_t n = feof(w.fptr) ? 0 : fread(w.buffer + w.n, 1, w.N - w.n, w.fptr);
+    if (ferror(w.fptr)) return false;
+    w.n += n;
+    return true;
+}
+
+bool dbde_walk_a_file(dbde_file_walker *walker, frame_header *fh, uint8_t *image) {
+    size_t npix = (size_t)(walker->width*walker->height);
+    if (walker->n - walker->i < (npix + npix/8 + 512)) {
+        if (!dbde_advance_file_buffer(*walker)) { fclose(walker->fptr); walker->fptr = NULL; return false; }
+        if (walker->n - walker->i < sizeof(frame_header)) return false;
+    }
+    uint8_t *buf = walker->buffer + walker->i;
+    *fh = dbde_unpack_frame(&buf, walker->width, walker->height, image);
+    if (fh->u64s != 2) { fclose(walker->fptr); walker->fptr = NULL; return false; }
+    if (buf - walker->buffer > walker->n) { printf("BUFFER OVERRUN!!!\n"); fclose(walker->fptr); walker->fptr = NULL; return false; }
+    if (buf - walker->buffer < walker->i) { printf("BUFFER UNDERRUN!!\n"); fclose(walker->fptr); walker->fptr = NULL; return false; }
+    walker->i = buf - walker->buffer;
+    return true;
+}
+
+void dbde_end_file_walk(dbde_file_walker *walker) {
+    if (walker->fptr) fclose(walker->fptr);
+    walker->fptr = NULL;
+}
+
 
 #ifdef DBDE_UTIL_MAIN
 
@@ -512,6 +578,26 @@ int main(int argc, char **argv) {
     );
 
     for (int i = 0; i < 1024; i++) if (!dbde_util_unit_test()) { printf("Failed iteration %d\n", i); return 1; }
+
+#ifdef DBDE_READ_FILE_TEST
+    printf("Reading %s\n",DBDE_READ_FILE_TEST);
+    int64_t ta6 = __rdtsc();
+    video_header vh;
+    frame_header fh;
+    uint8_t *image = (uint8_t*)malloc(4096*4096);
+    dbde_file_walker dfw = dbde_start_file_walk(DBDE_READ_FILE_TEST, 8192*8192, &vh);
+    if (!dfw.fptr) printf("FAILED OPEN\n");
+    else {
+        int i = 0;
+        while (dbde_walk_a_file(&dfw, &fh, image)) {
+            i++;
+            if (!(i%100)) printf("%d\n",i);
+        }
+        dbde_end_file_walk(&dfw);
+    }
+    int64_t tz6 = __rdtsc();
+    printf("Elapsed: %e\n", (double)(tz6-ta6));
+#endif
 }
 
 #endif
