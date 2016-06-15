@@ -26,6 +26,7 @@ void dbde_print_ascii(int W, int H, int ox, int oy, int nx, int ny, uint8_t *ima
         if (Z > im[j*32+i]) Z = im[j*32+i];
     }
     I = (I-Z)/10;
+    if (I < 1) I = 1;
     for (int j = 0; j < 32 ; j++) {
         for (int i = 0; i < 32 ; i++) {
             switch((im[32*j+i]-Z)/I) {
@@ -46,8 +47,8 @@ void dbde_print_ascii(int W, int H, int ox, int oy, int nx, int ny, uint8_t *ima
     }
 }
 
-void dbde_dump_pgm(int W, int H, uint8_t *image) {
-    FILE *f = fopen("blarp.pgm", "wb");
+void dbde_dump_pgm(int W, int H, uint8_t *image, const char* filename) {
+    FILE *f = fopen(filename, "wb");
     fprintf(f, "P2\n");
     fprintf(f, "%d %d\n",W, H);
     fprintf(f, "%d\n", 255);
@@ -62,9 +63,7 @@ void dbde_dump_pgm(int W, int H, uint8_t *image) {
 }
 
 bool dbde_util_unit_test() {
-
 #define DUUT_FAIL printf("%d %d %d %d %d %d\n", nX, nY, bI, mI, w, h); free(src); free(pack); free(dst); return false
-
     int nX = 8 + (rand()%(16384-8));
     int nY = 8 + (rand()%(16384-8));
     nX = 8;
@@ -93,6 +92,111 @@ bool dbde_util_unit_test() {
     }
     return true;
 #undef DUUT_FAIL
+}
+
+bool mycmp_vh(video_header u, video_header v) {
+    if (u.u64s != v.u64s) { printf("u64s: %d != %d", u.u64s, v.u64s); return false; }
+    if (u.width != v.width) { printf("width: %lld != %lld", (long long)u.width, (long long)v.width); return false; }
+    if (u.height != v.height) { printf("height: %lld != %lld", (long long)u.height, (long long)v.height); return false; }
+    if (u.frame_hz != v.frame_hz) { printf("frameHz: %lld != %lld", (long long)u.frame_hz, (long long)v.frame_hz); return false; }
+    return true;
+}
+
+bool mycmp_fh(frame_header f, frame_header g) {
+    if (f.u64s != g.u64s) { printf("u64s: %d != %d", f.u64s, g.u64s); return false; }
+    if (f.index != g.index) { printf("index: %lld != %lld", (long long)f.index, (long long)g.index); return false; }
+    if (f.reserved0 != g.reserved0) { printf("reserved0: %lld != %lld", (long long)f.reserved0, (long long)g.reserved0); return false; }
+    return true;
+}
+
+bool mycmp(const void* u, const void* v, size_t n) {
+    bool same = true;
+    for (int i = 0; i < n; i++) {
+        if (*(((char*)u)+i) != *(((char*)v)+i)) {
+            int j = i & 0xFFFFFFF0;
+            printf("%06d: ",j);
+            for (int k = j; k < j+16; k++) printf("%4d", *(((uint8_t*)u)+k));
+            printf("\n");
+            printf("%06d: ",j);
+            for (int k = j; k < j+16; k++) printf("%4d", *(((uint8_t*)v)+k));
+            printf("\n");
+            printf("        ");
+            for (int k = j; k < i; k++) printf("    ");
+            printf(" ^^^\n");
+            i = j+15;
+            same = false;
+        }
+    }
+    return same;
+}
+
+bool dbde_util_unit_minimal_8x16() {
+    uint8_t image[128] = {
+        0, 1, 2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15,
+        2, 3, 4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15, 16, 17,
+        4, 5, 6,  7,  8,  9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
+        6, 7, 8,  9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21,
+        7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22,
+        5, 6, 7,  8,  9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 21,
+        3, 4, 5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15, 16, 18, 20,
+        1, 2, 3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 15, 17, 19
+    };
+    uint8_t packed[128] = {
+        3, 0, 0, 0,                // Video header
+        8, 0, 0, 0, 0, 0, 0, 0,    // Height
+        16, 0, 0, 0, 0, 0, 0, 0,   // Width
+        1, 0, 0, 0, 0, 0, 0, 0,    // Frame rate
+        2, 0, 0, 0,                // Frame header
+        1, 0, 0, 0, 0, 0, 0, 0,    // Frame number
+        0, 0, 0, 0, 0, 0, 0, 0,    // Unused
+        2, 0, 0, 0,                // Number of uint64s of data
+        4, 4,                      // Bits per block
+        2, 0, 0, 0,                // Number of minimum values
+        0, 8,                      // Minimum values
+        8, 0, 0, 0,                // Number of packed U64s
+        0x10, 0x32, 0x54, 0x76,    // Row 1 block 1
+        0x32, 0x54, 0x76, 0x98,    // Row 2 block 1
+        0x54, 0x76, 0x98, 0xBA,    // Row 3 block 1
+        0x76, 0x98, 0xBA, 0xDC,    // Row 4 block 1
+        0x87, 0xA9, 0xCB, 0xED,    // Row 5 block 1
+        0x65, 0x87, 0xA9, 0xCB,    // Row 6 block 1
+        0x43, 0x65, 0x87, 0xA9,    // Row 7 block 1
+        0x21, 0x43, 0x65, 0x87,    // Row 8 block 1
+        0x10, 0x32, 0x54, 0x76,    // Row 1 block 2
+        0x32, 0x54, 0x76, 0x98,    // Row 2 block 2
+        0x54, 0x76, 0x98, 0xBA,    // Row 3 block 2
+        0x76, 0x98, 0xBA, 0xDC,    // Row 4 block 2
+        0x87, 0xA9, 0xCB, 0xED,    // Row 5 block 2
+        0x65, 0x87, 0xA9, 0xDB,    // Row 6 block 2
+        0x43, 0x65, 0x87, 0xCA,    // Row 7 block 2
+        0x21, 0x43, 0x75, 0xB9,    // Row 8 block 2
+    };
+    video_header vh = (video_header){3, 8, 16, 1};
+    frame_header fh = (frame_header){2, 1, 0};
+    uint8_t new_im[128];
+    uint8_t z0[1024];
+    uint8_t new_pk[128];
+    uint8_t z1[1024];
+    video_header new_vh;
+    frame_header new_fh;
+    uint8_t *b = packed;
+    new_vh = dbde_unpack_video_header(&b);
+    if (b - packed != 28) { printf("Read %d bytes instead of 28 to unpack video header\n", (int)(b - packed)); exit(1); }
+    if (!mycmp_vh(vh, new_vh)) { printf("Unpacked video header wrong\n"); exit(1); }
+    new_fh = dbde_unpack_frame_header(&b);
+    if (b - packed != 48) { printf("Read %d bytes instead of 20 to unpack frame header\n", (int)(b - packed) - 28); exit(1); }
+    if (!mycmp_fh(fh, new_fh)) { printf("Unpacked frame header wrong\n"); exit(1); }
+    b = packed + 28;  // Re-read frame header so we can get whole frame at once
+    new_fh = dbde_unpack_frame(&b, (int)vh.width, (int)vh.height, new_im);
+    if (!mycmp_fh(fh, new_fh)) { printf("Unpacked frame header wrong on second pass\n"); exit(1); }
+    if (b - packed != 128) { printf("Read %d bytes instead of 128 during unpacking\n", (int)(b-packed)); exit(1); }
+    if (!mycmp(image, new_im, 128)) { printf("Image data does not match\n"); exit(1); }
+    b = new_pk;
+    int n;
+    n = dbde_pack_video_header(vh, b); b += n;
+    n = dbde_pack_frame(fh.index, image, (int)vh.width, (int)vh.height, b);
+    if (n != 100) { printf("Wrong number of bytes written: %d\n", n); exit(1); }
+    if (!mycmp(packed, new_pk, 128)) { printf("Packed data does not match\n"); exit(1); }
 }
 
 // Include down here to avoid letting the guys above know about operations we may have available on a dev machine
@@ -181,6 +285,8 @@ int main(int argc, char **argv) {
 
     printf("\n\n\n");
 
+    dbde_util_unit_minimal_8x16();
+
 #define XRES 2536
 #define YRES 2048
 
@@ -259,7 +365,7 @@ int main(int argc, char **argv) {
         while (dbde_walk_a_file(&dfw, &fh, image)) {
             i++;
             if (!(i%100)) {
-                if (i==100) dbde_dump_pgm(vh.width, vh.height, image);
+                if (i == 100) dbde_dump_pgm(vh.width, vh.height, image, "frame_100.pgm");
                 dbde_print_ascii(
                     vh.width, vh.height,
                     (vh.width > 1024) ? 768 : 0, (vh.height > 1024) ? 768 : 0,

@@ -31,6 +31,7 @@ void dbde_unpack_8x8(uint8_t depth, uint8_t minval, uint8_t* packed, size_t stri
 void dbde_unpack_8x8_partial(uint8_t depth, uint8_t minval, uint8_t* packed, size_t stride, int rightmargin, int downmargin, uint8_t* image);
 
 size_t dbde_unpack_image(uint8_t* packed, int W, int H, uint8_t *image);
+frame_header dbde_unpack_frame_header(uint8_t **packed);
 frame_header dbde_unpack_frame(uint8_t **packed, int W, int H, uint8_t *image);
 
 video_header dbde_unpack_video_header(uint8_t **packed);

@@ -176,6 +176,7 @@ Thus, we encode the image data as:
 0x04 0x02 0x03 0x00   // Number of bits per block
 0x00000004            // Number of min values
 0x13 0x18 0x1C 0x1A   // Minimum values (1/byte)
+0x00000009            // Number of U64s in data
 0x298362534A53A486    // Image data
 0x630926404916A376
 0x657A9CBC78469B68

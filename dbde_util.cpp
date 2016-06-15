@@ -323,12 +323,17 @@ size_t dbde_unpack_image(uint8_t *packed, int W, int H, uint8_t *image) {
     return pack - packed;
 }
 
-frame_header dbde_unpack_frame(uint8_t **packed, int W, int H, uint8_t *image) {
+frame_header dbde_unpack_frame_header(uint8_t **packed) {
     frame_header fh;
     fh.u64s = *((int*)*packed); *packed += 4;
     fh.index = *((uint64_t*)*packed); *packed += 8;
     fh.reserved0 = *((uint64_t*)*packed); *packed += 8;
-    if (fh.u64s != 2) { fh.u64s = -1; return fh; }
+    if (fh.u64s != 2) fh.u64s = -1;
+    return fh;
+}
+
+frame_header dbde_unpack_frame(uint8_t **packed, int W, int H, uint8_t *image) {
+    frame_header fh = dbde_unpack_frame_header(packed);
     size_t n = dbde_unpack_image(*packed, W, H, image);
     if (n == 0) { fh.u64s = -1; }
     else { *packed += n; }
