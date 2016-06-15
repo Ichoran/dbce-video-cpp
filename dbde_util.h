@@ -18,12 +18,12 @@ struct frame_header {
     uint64_t reserved0;
 };
 
-uint32_t dbde_encode_8x8(uint8_t *image, int stride, uint8_t *target);
-uint32_t dbde_encode_8x8_partial(uint8_t *image, int stride, int rightmargin, int downmargin, uint8_t *target);
+uint32_t dbde_pack_8x8(uint8_t *image, int stride, uint8_t *target);
+uint32_t dbde_pack_8x8_partial(uint8_t *image, int stride, int rightmargin, int downmargin, uint8_t *target);
 
 size_t dbde_pack_image(uint8_t *image, int W, int H, uint8_t *target);
 size_t dbde_pack_frame_header(frame_header fh, uint8_t *target);
-size_t dbde_pack_frame(uint64_t index, uint8_t *image);
+size_t dbde_pack_frame(uint64_t index, uint8_t *image, int W, int H, uint8_t *target);
 
 size_t dbde_pack_video_header(video_header vh, uint8_t *target);
 
