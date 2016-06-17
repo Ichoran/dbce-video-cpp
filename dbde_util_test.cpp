@@ -132,8 +132,8 @@ bool mycmp(const void* u, const void* v, size_t n) {
 
 bool dbde_util_unit_minimal_8x16() {
     uint8_t image[128] = {
-        0, 1, 2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15,
-        2, 3, 4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15, 16, 17,
+        0, 1, 9,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15,
+        8, 3, 4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15, 16, 17,
         4, 5, 6,  7,  8,  9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
         6, 7, 8,  9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21,
         7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22,
@@ -154,8 +154,8 @@ bool dbde_util_unit_minimal_8x16() {
         2, 0, 0, 0,                // Number of minimum values
         0, 8,                      // Minimum values
         8, 0, 0, 0,                // Number of packed U64s
-        0x10, 0x32, 0x54, 0x76,    // Row 1 block 1
-        0x32, 0x54, 0x76, 0x98,    // Row 2 block 1
+        0x10, 0x39, 0x54, 0x76,    // Row 1 block 1
+        0x38, 0x54, 0x76, 0x98,    // Row 2 block 1
         0x54, 0x76, 0x98, 0xBA,    // Row 3 block 1
         0x76, 0x98, 0xBA, 0xDC,    // Row 4 block 1
         0x87, 0xA9, 0xCB, 0xED,    // Row 5 block 1
@@ -169,7 +169,7 @@ bool dbde_util_unit_minimal_8x16() {
         0x87, 0xA9, 0xCB, 0xED,    // Row 5 block 2
         0x65, 0x87, 0xA9, 0xDB,    // Row 6 block 2
         0x43, 0x65, 0x87, 0xCA,    // Row 7 block 2
-        0x21, 0x43, 0x75, 0xB9,    // Row 8 block 2
+        0x21, 0x43, 0x75, 0xB9     // Row 8 block 2
     };
     video_header vh = (video_header){3, 8, 16, 1};
     frame_header fh = (frame_header){2, 1, 0};
@@ -196,6 +196,14 @@ bool dbde_util_unit_minimal_8x16() {
     n = dbde_pack_video_header(vh, b); b += n;
     n = dbde_pack_frame(fh.index, image, (int)vh.width, (int)vh.height, b);
     if (n != 100) { printf("Wrong number of bytes written: %d\n", n); exit(1); }
+#ifdef DBDE_WRITE_MINIMAL
+    FILE *fm = fopen(DBDE_WRITE_MINIMAL, "wb");
+    fwrite(new_pk, 128, 1, fm);
+#ifdef DBDE_MULTIPLE_MINIMAL_FRAMES
+    for (int i = 1; i < DBDE_MULTIPLE_MINIMAL_FRAMES; i++) fwrite(new_pk + 28, 100, 1, fm);
+#endif
+    fclose(fm);
+#endif
     if (!mycmp(packed, new_pk, 128)) { printf("Packed data does not match\n"); exit(1); }
 }
 
