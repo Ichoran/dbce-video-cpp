@@ -28,10 +28,12 @@ The video header is 28 bytes long, and is packed as follows.  All values are sto
 
 | Data type |  Size (bytes) |  Meaning |
 |-----------|---------|----------|
-| I32       | 4       | Number of additional U64s in video header (always 3 for now)
+| I32       | 4       | Number of additional 8-byte fields in video header (always 3)
 | U64       | 8       | Image height
 | U64       | 8       | Image width
-| U64       | 8       | Frame rate in Hz (not needed for parsing)
+| F64       | 8       | Frame rate in Hz (not needed for parsing)
+
+*Note: Data types are specified as a scheme plus a number of bits; `I` means signed integer, `U` means unsigned integer, and `F` means IEEE754 floating point number, while bits are one of `8`, `16`, `32`, or `64`.  Presently only `U8`, `I32`, `U64`, and `F64` are used out of all possibilities.*
 
 ### Frame header
 
@@ -39,9 +41,9 @@ The frame header is 20 bytes and contains no information essential for recovery 
 
 | Data type |  Size (bytes) |  Meaning |
 |-----------|---------|----------|
-| I32       | 4       | Number of additional U64s in frame header (always 2 for now)
+| I32       | 4       | Number of additional 8-byte fields in frame header (always 2)
 | U64       | 8       | Frame number (frames are in order but some may have been dropped)
-| U64       | 8       | Reserved
+| U64       | 8       | Duration since start of recording in nanoseconds
 
 ### Frame data
 

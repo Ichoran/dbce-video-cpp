@@ -183,7 +183,7 @@ size_t dbde_pack_frame_header(frame_header fh, uint8_t *target) {
     size_t offset = 0;
     *((int32_t*)target) = fh.u64s; offset += 4;
     *((uint64_t*)(target + offset)) = fh.index; offset += 8;
-    *((uint64_t*)(target + offset)) = fh.reserved0; offset += 8;
+    *((double*)(target + offset)) = fh.elapsed_ns; offset += 8;
     return offset;
 }
 
@@ -200,7 +200,11 @@ size_t dbde_pack_video_header(video_header vh, uint8_t *target) {
     *((int32_t*)target) = vh.u64s; offset += 4;
     *((uint64_t*)(target + offset)) = vh.height; offset += 8;
     *((uint64_t*)(target + offset)) = vh.width; offset += 8;
-    *((uint64_t*)(target + offset)) = vh.frame_hz; offset += 8;
+#ifdef DBDE_HZ_AS_INTEGER
+    *((uint64_t*)(target + offset)) = (long long)(vh.frame_hz + 0.5); offset += 8;
+#else
+    *((double*)(target + offset)) = vh.frame_hz; offset += 8;
+#endif
     return offset;
 }
 
@@ -327,7 +331,7 @@ frame_header dbde_unpack_frame_header(uint8_t **packed) {
     frame_header fh;
     fh.u64s = *((int*)*packed); *packed += 4;
     fh.index = *((uint64_t*)*packed); *packed += 8;
-    fh.reserved0 = *((uint64_t*)*packed); *packed += 8;
+    fh.elapsed_ns = *((double*)*packed); *packed += 8;
     if (fh.u64s != 2) fh.u64s = -1;
     return fh;
 }
@@ -345,7 +349,11 @@ video_header dbde_unpack_video_header(uint8_t **packed) {
     vh.u64s = *((int*)*packed); *packed += 4;
     vh.height = *((uint64_t*)*packed); *packed += 8;
     vh.width = *((uint64_t*)*packed); *packed += 8;
-    vh.frame_hz = *((uint64_t*)*packed); *packed += 8;
+#ifdef DBDE_HZ_AS_INTEGER
+    vh.frame_hz = (double)(*((uint64_t*)*packed)); *packed += 8;
+#else
+    vh.frame_hz = (*((double*)*packed)); *packed += 8;
+#endif
     if (vh.u64s != 3) { vh.u64s = -1; }
     return vh;
 }

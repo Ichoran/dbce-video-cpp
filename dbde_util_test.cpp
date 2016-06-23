@@ -6,6 +6,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <stdio.h>
+#include <math.h>
 #include "dbde_util.h"
 
 void dbde_print_ascii(int W, int H, int ox, int oy, int nx, int ny, uint8_t *image) {
@@ -98,14 +99,14 @@ bool mycmp_vh(video_header u, video_header v) {
     if (u.u64s != v.u64s) { printf("u64s: %d != %d", u.u64s, v.u64s); return false; }
     if (u.width != v.width) { printf("width: %lld != %lld", (long long)u.width, (long long)v.width); return false; }
     if (u.height != v.height) { printf("height: %lld != %lld", (long long)u.height, (long long)v.height); return false; }
-    if (u.frame_hz != v.frame_hz) { printf("frameHz: %lld != %lld", (long long)u.frame_hz, (long long)v.frame_hz); return false; }
+    if (u.frame_hz != v.frame_hz && !(isnan(u.frame_hz) && isnan(v.frame_hz))) { printf("frameHz: %e != %e", u.frame_hz, v.frame_hz); return false; }
     return true;
 }
 
 bool mycmp_fh(frame_header f, frame_header g) {
     if (f.u64s != g.u64s) { printf("u64s: %d != %d", f.u64s, g.u64s); return false; }
     if (f.index != g.index) { printf("index: %lld != %lld", (long long)f.index, (long long)g.index); return false; }
-    if (f.reserved0 != g.reserved0) { printf("reserved0: %lld != %lld", (long long)f.reserved0, (long long)g.reserved0); return false; }
+    if (f.elapsed_ns != g.elapsed_ns) { printf("elapsed_ns: %lld != %lld", (long long)f.elapsed_ns, (long long)g.elapsed_ns); return false; }
     return true;
 }
 
@@ -145,7 +146,11 @@ bool dbde_util_unit_minimal_8x16() {
         3, 0, 0, 0,                // Video header
         8, 0, 0, 0, 0, 0, 0, 0,    // Height
         16, 0, 0, 0, 0, 0, 0, 0,   // Width
-        1, 0, 0, 0, 0, 0, 0, 0,    // Frame rate
+#ifdef DBDE_HZ_IN_INTEGER
+        1, 0, 0, 0, 0, 0, 0, 0,    // Frame rate (U64)
+#else
+        0, 0, 0, 0, 0, 0, -16, 63, // Frame rate (double)
+#endif
         2, 0, 0, 0,                // Frame header
         1, 0, 0, 0, 0, 0, 0, 0,    // Frame number
         0, 0, 0, 0, 0, 0, 0, 0,    // Unused
@@ -372,8 +377,11 @@ int main(int argc, char **argv) {
         int i = 0;
         while (dbde_walk_a_file(&dfw, &fh, image)) {
             i++;
+#ifdef DBDE_WRITE_A_FRAME
+            if (i == DBDE_WRITE_A_FRAME) dbde_dump_pgm(vh.width, vh.height, image, "a_frame.pgm");
+#endif
             if (!(i%100)) {
-                if (i == 100) dbde_dump_pgm(vh.width, vh.height, image, "frame_100.pgm");
+                if (i == 100) 
                 dbde_print_ascii(
                     vh.width, vh.height,
                     (vh.width > 1024) ? 768 : 0, (vh.height > 1024) ? 768 : 0,

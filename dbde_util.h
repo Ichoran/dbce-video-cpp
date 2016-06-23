@@ -9,13 +9,13 @@ struct video_header {
     uint32_t u64s;
     uint64_t height;
     uint64_t width;
-    uint64_t frame_hz;
+    double frame_hz;
 };
 
 struct frame_header {
     uint32_t u64s;
     uint64_t index;
-    uint64_t reserved0;
+    uint64_t elapsed_ns;
 };
 
 uint32_t dbde_pack_8x8(uint8_t *image, int stride, uint8_t *target);
