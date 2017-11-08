@@ -149,7 +149,7 @@ bool dbde_util_unit_minimal_8x16() {
 #ifdef DBDE_HZ_IN_INTEGER
         1, 0, 0, 0, 0, 0, 0, 0,    // Frame rate (U64)
 #else
-        0, 0, 0, 0, 0, 0, -16, 63, // Frame rate (double)
+        0, 0, 0, 0, 0, 0, 240, 63, // Frame rate (double)
 #endif
         2, 0, 0, 0,                // Frame header
         1, 0, 0, 0, 0, 0, 0, 0,    // Frame number
